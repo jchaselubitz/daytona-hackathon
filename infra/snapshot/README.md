@@ -5,9 +5,9 @@ the reproducibility anchor (contract §1, plan §7).
 
 ## What it provides
 
-`node`, `python3` + `pip`, `opencode`, and PDF/document tooling
+`node`, `python3` + `pip`, Codex CLI, and PDF/document tooling
 (`poppler-utils` → `pdftotext`, `pypdf`, `pdfplumber`, `pandoc`). Plus the baked
-[`AGENTS.md`](./AGENTS.md) that tells opencode how to keep automations
+[`AGENTS.md`](./AGENTS.md) that tells Codex how to keep automations
 reproducible.
 
 ## Build, push, and pin (checklist C2)
@@ -40,8 +40,8 @@ DAYTONA_SNAPSHOT_DIGEST=sha256:<digest>
 ```
 
 > Phase-0 spike S1 validates this end to end: create a sandbox from the snapshot,
-> run `opencode serve` on :4096, reach it via the preview URL, and curl the SSE
-> `/event` stream. Do that before relying on the server's workspace lifecycle.
+> run `codex --version`, complete `codex login --device-auth`, and run a small
+> `codex exec` prompt in `/workspace`.
 
 ## Alternatively: declarative image via the SDK
 

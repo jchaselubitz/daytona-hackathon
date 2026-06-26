@@ -15,17 +15,17 @@ up, `/api/health` 200, DB read/write verified, web served on :5173).
 ## Phase 0 — Spikes
 | Step | Status | Notes |
 |---|---|---|
-| S1 opencode in a sandbox | **needs human** | Requires building/pushing the snapshot image and a live Daytona sandbox + preview URL. The code path (`daytona.ts`, `opencode.ts`) is written against it. |
+| S1 Codex CLI in a sandbox | **needs human** | Requires building/pushing the snapshot image and a live Daytona sandbox. The code path (`daytona.ts`, `codex.ts`) is written against it. |
 | S2 ChatGPT device login | **needs human** | Requires a browser to approve the device code. Flow implemented in `services/chatgpt.ts`; the exact login command + `auth.json` parsing must be confirmed live (isolated in one place). |
 
 ## Phase 1 — Foundations
 | Step | Status | Notes |
 |---|---|---|
 | D1 shared package | **done** | `@app/shared` builds; `apps/web` + `apps/server` import `ROUTES`, types, `buildPath`. |
-| D2 opencode client | **code-complete** | Hand-written typed client + SSE normalizer (`opencode.ts`) instead of generated-from-OpenAPI; confirm shapes in S1. |
+| D2 Codex runner | **code-complete** | Server-side Codex CLI runner (`codex.ts`) relays normalized output over the existing WebSocket contract; confirm in S1. |
 | C1 monorepo tooling | **done** | pnpm workspaces; `pnpm -r build` runs. |
-| C2 snapshot image | **code-complete / needs human** | `infra/snapshot/Dockerfile` authored with node, python3+pip, opencode, poppler-utils, pypdf/pdfplumber, pandoc. Digest must be built + recorded (`infra/snapshot/README.md`). |
-| C3 AGENTS.md | **done** | `infra/snapshot/AGENTS.md` baked into the image; instructs opencode on reproducible deps. |
+| C2 snapshot image | **code-complete / needs human** | `infra/snapshot/Dockerfile` authored with node, python3+pip, Codex CLI, poppler-utils, pypdf/pdfplumber, pandoc. Digest must be built + recorded (`infra/snapshot/README.md`). |
+| C3 AGENTS.md | **done** | `infra/snapshot/AGENTS.md` baked into the image; instructs Codex on reproducible deps. |
 | C4 compose + Dockerfiles | **done** | Both app images build; `docker compose up` → Postgres healthy + both containers running, verified. |
 | A1 server scaffold + health | **done** | Fastify + ws; `GET /api/health` returns 200 in compose. |
 | A2 DB access layer | **done** | `pg` layer + row→entity mappers bound to `db/schema.sql`; reads the seeded demo user. |
@@ -38,7 +38,7 @@ up, `/api/health` 200, DB read/write verified, web served on :5173).
 | A4 workspace lifecycle + routes | **done / code-complete** | Routes + create→provision state machine verified (transitions to `error` cleanly without a snapshot). Live `ready` needs C2 digest. |
 | A5 file upload + manifest + push | **code-complete** | Canonical copy to storage, manifest row, push into sandbox knowledge. |
 | A6 ChatGPT connect + api-key | **code-complete** | Device flow + encrypted `auth.json` backup + API-key fallback. |
-| A7 SSE→WS relay + chat routes | **code-complete** | One SSE per workspace, normalized + fanned out; chat is 202 + WS output. |
+| A7 Codex→WS relay + chat routes | **code-complete** | Codex CLI output is normalized + fanned out; chat is 202 + WS output. |
 | A8 capture automations | **code-complete** | In-sandbox tar → bundle + `automations` row (versioned). |
 | A9 run automation | **code-complete** | setup + entrypoint with inputs as env; collects `/workspace/artifacts/<run-id>`. |
 | A10 reproduce | **code-complete** | Fresh sandbox from bundle digest → restore auth → hydrate knowledge → unpack → run. |

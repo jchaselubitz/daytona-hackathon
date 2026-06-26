@@ -1,0 +1,18 @@
+{
+  "schema": "automation.manifest/v1",
+  "name": "luma-berlin-free-food",
+  "version": "v1",
+  "runtime": "python",
+  "entrypoint": "main.py",
+  "dependencyFiles": ["requirements.txt"],
+  "setup": ["pip3 install --break-system-packages -r requirements.txt"],
+  "inputs": [
+    {
+      "key": "city",
+      "type": "string",
+      "required": false,
+      "description": "Luma city slug to search, e.g. \"berlin\" (default: berlin)"
+    }
+  ],
+  "snapshotDigest": ""
+}

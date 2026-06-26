@@ -2,24 +2,23 @@
 
 Lets non-technical users run agentic work in [Daytona](https://daytona.io)
 sandboxes: upload a knowledgebase, connect ChatGPT, chat with an
-[opencode](https://opencode.ai) agent that operates on the files, and capture +
+Codex CLI agent that operates on the files, and capture +
 run + reproduce the automations it builds — downloading the outputs.
 
 ## Architecture (MVP)
 
 - **`apps/web`** — React + Vite frontend (the only thing the user touches).
 - **`apps/server`** — Fastify control plane: REST API + a WebSocket relay,
-  Daytona sandbox lifecycle, the opencode client, Postgres access, and object
+  Daytona sandbox lifecycle, the Codex CLI runner, Postgres access, and object
   storage. **All secrets live here; the browser never talks to a sandbox.**
 - **`packages/shared`** — the frozen code contract (`contract.ts`) imported by
   both apps so they can't drift.
-- **`infra/snapshot`** — the Daytona sandbox base image (node, python, opencode,
+- **`infra/snapshot`** — the Daytona sandbox base image (node, python, Codex CLI,
   PDF tooling) + the agent guide. Its pinned digest is the reproducibility anchor.
 - **`db/schema.sql`** — authoritative Postgres schema.
 
-Each user **workspace** is a Daytona sandbox. `opencode serve` runs inside it on
-`:4096`, reached only by the server over a guarded Daytona preview URL; chat is
-streamed SSE→WebSocket to the browser.
+Each user **workspace** is a Daytona sandbox. The server runs `codex exec` inside
+it and relays chat results over WebSocket to the browser.
 
 See [`docs/mvp-engineering-plan.md`](docs/mvp-engineering-plan.md),
 [`docs/code-contract.md`](docs/code-contract.md),

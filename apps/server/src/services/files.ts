@@ -12,7 +12,7 @@ import type { FileManifestEntry } from "@app/shared";
 import { SANDBOX_PATHS } from "@app/shared";
 import { mapFile, query, type FileRow } from "../db.js";
 import { getStorage } from "../storage/index.js";
-import { getSandbox } from "../daytona.js";
+import { ensureWorkspaceDirs, getSandbox } from "../daytona.js";
 import { getWorkspaceRow } from "./workspaces.js";
 
 export interface IncomingFile {
@@ -31,6 +31,7 @@ export async function uploadFiles(
 ): Promise<FileManifestEntry[]> {
   const ws = await getWorkspaceRow(workspaceId);
   const sandbox = ws.daytona_sandbox_id ? await getSandbox(ws.daytona_sandbox_id) : null;
+  if (sandbox) await ensureWorkspaceDirs(sandbox);
   const storage = getStorage();
   const out: FileManifestEntry[] = [];
 
@@ -75,6 +76,7 @@ export async function listFiles(workspaceId: string): Promise<FileManifestEntry[
 /** Re-push all canonical copies into a (fresh) sandbox — used by reproduce. */
 export async function hydrateKnowledge(workspaceId: string, sandboxId: string): Promise<void> {
   const sandbox = await getSandbox(sandboxId);
+  await ensureWorkspaceDirs(sandbox);
   const storage = getStorage();
   const { rows } = await query<FileRow>(
     `SELECT * FROM file_manifest WHERE workspace_id = $1`,

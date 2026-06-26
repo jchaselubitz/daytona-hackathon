@@ -155,17 +155,30 @@ function FilesPanel({ workspace }: { workspace: Workspace }) {
 function ConnectPanel({ workspace, onChanged }: { workspace: Workspace; onChanged: () => void }) {
   const [verification, setVerification] = useState<{ url?: string; code?: string } | null>(null);
   const [pending, setPending] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [connected, setConnected] = useState(workspace.chatgptConnected);
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setConnected(workspace.chatgptConnected);
+  }, [workspace.id, workspace.chatgptConnected]);
+
   const start = async () => {
     setError(null);
+    setStarting(true);
+    setConnected(false);
     try {
       const res = await api.startChatGptConnect(workspace.id);
+      if (!res.verificationUrl || !res.userCode) {
+        throw new Error("ChatGPT login started, but no verification URL was returned.");
+      }
       setVerification({ url: res.verificationUrl, code: res.userCode });
       setPending(true);
     } catch (e) {
       setError(errMsg(e));
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -176,8 +189,10 @@ function ConnectPanel({ workspace, onChanged }: { workspace: Workspace; onChange
       try {
         const s = await api.chatGptConnectStatus(workspace.id);
         if (s.connected) {
+          setConnected(true);
           setPending(false);
           setVerification(null);
+          setError(null);
           onChanged();
         }
       } catch {
@@ -192,20 +207,27 @@ function ConnectPanel({ workspace, onChanged }: { workspace: Workspace; onChange
     try {
       await api.setApiKey(workspace.id, apiKey.trim());
       setApiKey("");
+      setConnected(true);
       onChanged();
     } catch (e) {
       setError(errMsg(e));
     }
   };
 
-  if (workspace.chatgptConnected) {
+  if (connected) {
     return (
-      <div className="card">
-        <h3>Model access</h3>
-        <p>
-          <span className="badge connected">connected</span> This workspace can talk to the model.
-        </p>
-      </div>
+      <>
+        <div className="card" aria-live="polite">
+          <h3>ChatGPT connected</h3>
+          <p>
+            <span className="badge connected">connected</span> This workspace is signed in and ready
+            to chat.
+          </p>
+          <button className="btn secondary" onClick={start} disabled={starting}>
+            {starting ? "Starting login..." : "Reconnect"}
+          </button>
+        </div>
+      </>
     );
   }
 
@@ -215,8 +237,8 @@ function ConnectPanel({ workspace, onChanged }: { workspace: Workspace; onChange
         <h3>Connect ChatGPT</h3>
         {error && <div className="error-banner">{error}</div>}
         {!verification ? (
-          <button className="btn" onClick={start} disabled={workspace.state !== "ready"}>
-            Start ChatGPT login
+          <button className="btn" onClick={start} disabled={workspace.state !== "ready" || starting}>
+            {starting ? "Starting login..." : "Start ChatGPT login"}
           </button>
         ) : (
           <div>

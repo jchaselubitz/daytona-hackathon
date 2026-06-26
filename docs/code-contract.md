@@ -17,10 +17,10 @@ consumers **and** this doc, plus a bump of `CONTRACT_VERSION`.
 
 | Stream | Owns | Builds against (does NOT change unilaterally) |
 |---|---|---|
-| **A. Server / control plane** (`apps/server`) | REST API, WS relay, Daytona lifecycle, opencode client, Storage adapter, DB access | `contract.ts` types, `ROUTES`, WS protocol, `db/schema.sql`, `SANDBOX_PATHS` |
+| **A. Server / control plane** (`apps/server`) | REST API, WS relay, Daytona lifecycle, Codex CLI runner, Storage adapter, DB access | `contract.ts` types, `ROUTES`, WS protocol, `db/schema.sql`, `SANDBOX_PATHS` |
 | **B. Web / frontend** (`apps/web`) | React UI, API client, WS client, all views | `ROUTES`, request/response types, `ClientToServer`/`ServerToClient`, `ApiError` |
-| **C. Infra / sandbox** (`infra/`, `db/`) | Daytona snapshot image, docker compose, Postgres init, MinIO | `SANDBOX_PATHS`, `OPENCODE_PORT`, env var names, `db/schema.sql` |
-| **D. Shared** (`packages/shared`) | The contract itself + generated opencode OpenAPI client | n/a — this is the contract |
+| **C. Infra / sandbox** (`infra/`, `db/`) | Daytona snapshot image, docker compose, Postgres init, MinIO | `SANDBOX_PATHS`, env var names, `db/schema.sql` |
+| **D. Shared** (`packages/shared`) | The contract itself | n/a — this is the contract |
 
 Rule of thumb: **import types, never redefine them.** Both `apps/web` and
 `apps/server` import from `@app/shared`.
@@ -29,16 +29,16 @@ Rule of thumb: **import types, never redefine them.** Both `apps/web` and
 
 ## 1. Sandbox layout contract (Stream A ↔ C)
 
-From `SANDBOX_PATHS` and `OPENCODE_PORT` in `contract.ts`:
+From `SANDBOX_PATHS` in `contract.ts`:
 
 - `/workspace/knowledge` — uploaded knowledgebase files (hydrated by server).
 - `/workspace/automations/<name>/` — generated/captured scripts (a bundle).
 - `/workspace/artifacts/<run-id>/` — run outputs the server collects.
-- `auth.json` — opencode/codex tokens; server backs it up encrypted.
-- `opencode serve` listens on **:4096**, reached via a Daytona **preview URL**
-  guarded by `OPENCODE_SERVER_PASSWORD`. The browser never connects directly.
+- `auth.json` — Codex tokens; server backs it up encrypted.
+- The server runs `codex exec` inside the sandbox. The browser never connects
+  directly to the sandbox.
 
-The snapshot image (Stream C) MUST provide: node, python3 + pip, `opencode`, and
+The snapshot image (Stream C) MUST provide: node, python3 + pip, Codex CLI, and
 PDF tooling (`poppler-utils`, `pypdf`/`pdfplumber`, `pandoc`). The pinned
 **snapshot digest** is the reproducibility anchor and is stored per workspace.
 
@@ -78,8 +78,8 @@ output arrives over the WebSocket (§3). This keeps streaming in one channel.
 
 ## 3. WebSocket contract (Stream A ↔ B)
 
-Browser connects to `WS_PATH` (`/ws`) with `?workspaceId=<id>`. The server keeps
-**one** SSE connection to opencode `/event` per workspace and normalizes events.
+Browser connects to `WS_PATH` (`/ws`) with `?workspaceId=<id>`. The server
+normalizes Codex CLI run output into chat events.
 
 - Client → server: `ClientToServer` (`subscribe` / `unsubscribe` / `ping`).
 - Server → client: `ServerToClient` — `connected`, `message.delta`,
@@ -125,7 +125,7 @@ declared `inputs`, and the `snapshotDigest` it was authored against.
 to `/workspace/automations/<name>` → run `setup` → exec `entrypoint` → collect
 `/workspace/artifacts/<run-id>`. See plan §7.
 
-To keep deps captured, the sandbox's `AGENTS.md` instructs opencode to write new
+To keep deps captured, the sandbox's `AGENTS.md` instructs Codex to write new
 dependencies into the declared `dependencyFiles` rather than installing ad hoc.
 
 ---
@@ -134,7 +134,7 @@ dependencies into the declared `dependencyFiles` rather than installing ad hoc.
 
 Variable names are frozen in [`.env.example`](../.env.example). Add a variable
 there in the same PR that introduces its use. Secrets (`DAYTONA_API_KEY`,
-`OPENAI_API_KEY`, `AUTH_ENCRYPTION_KEY`, `OPENCODE_SERVER_PASSWORD`) never reach
+`OPENAI_API_KEY`, `AUTH_ENCRYPTION_KEY`) never reach
 the browser and are read only by `apps/server`.
 
 ---

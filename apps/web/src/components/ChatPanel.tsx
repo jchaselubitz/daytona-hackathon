@@ -15,6 +15,7 @@ export function ChatPanel({ workspace }: { workspace: Workspace }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [tool, setTool] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const wsRef = useRef<WsClient | null>(null);
@@ -40,6 +41,7 @@ export function ChatPanel({ workspace }: { workspace: Workspace }) {
   function handleEvent(msg: ServerToClient) {
     switch (msg.type) {
       case "message.delta":
+        setWorking(false);
         setMessages((prev) => {
           const existing = prev.find((m) => m.id === msg.messageId);
           if (existing) {
@@ -55,8 +57,10 @@ export function ChatPanel({ workspace }: { workspace: Workspace }) {
           prev.map((m) => (m.id === msg.messageId ? { ...m, done: true } : m)),
         );
         setTool(null);
+        setWorking(false);
         break;
       case "tool.update":
+        setWorking(false);
         setTool(
           msg.status === "completed"
             ? null
@@ -64,10 +68,14 @@ export function ChatPanel({ workspace }: { workspace: Workspace }) {
         );
         break;
       case "session.status":
-        if (msg.status === "idle") setTool(null);
+        if (msg.status === "idle") {
+          setTool(null);
+          setWorking(false);
+        }
         break;
       case "error":
         setError(msg.message);
+        setWorking(false);
         break;
     }
   }
@@ -87,11 +95,13 @@ export function ChatPanel({ workspace }: { workspace: Workspace }) {
     setInput("");
     const localId = `local-${Date.now()}`;
     setMessages((prev) => [...prev, { id: localId, role: "user", text, done: true }]);
+    setWorking(true);
     try {
       const id = await ensureSession();
       await api.sendChatMessage(workspace.id, { sessionId: id, text });
     } catch (e) {
       setError(errMsg(e));
+      setWorking(false);
     }
   };
 
@@ -111,6 +121,13 @@ export function ChatPanel({ workspace }: { workspace: Workspace }) {
           </div>
         ))}
         {tool && <div className="tool">⚙ {tool}</div>}
+        {working && !tool && (
+          <div className="agent-working" aria-label="Agent is working">
+            <span className="agent-working-dot" />
+            <span className="agent-working-dot" />
+            <span className="agent-working-dot" />
+          </div>
+        )}
       </div>
       <div className="chat-input">
         <textarea

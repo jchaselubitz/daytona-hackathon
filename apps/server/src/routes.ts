@@ -30,10 +30,11 @@ import {
   runAutomation,
 } from "./services/automations.js";
 import { getStorage } from "./storage/index.js";
+import type { WsHub } from "./ws.js";
 
 type Params = Record<string, string>;
 
-export async function registerRoutes(app: FastifyInstance): Promise<void> {
+export async function registerRoutes(app: FastifyInstance, hub: WsHub): Promise<void> {
   // Health (not in ROUTES; always available).
   app.get("/api/health", async () => ({ ok: true, ts: new Date().toISOString() }));
 
@@ -87,7 +88,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.post(route("sendChatMessage").path, async (req, reply) => {
     const body = req.body as SendChatMessageRequest;
     if (!body?.sessionId || !body?.text) throw badRequest("sessionId and text are required");
-    await sendChatMessage((req.params as Params).id!, body.sessionId, body.text);
+    await sendChatMessage((req.params as Params).id!, body.sessionId, body.text, hub);
     reply.code(202);
     return { accepted: true };
   });

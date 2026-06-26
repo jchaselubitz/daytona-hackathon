@@ -18,14 +18,14 @@ Legend: `[ ]` todo · `→ depends on` · everything builds against
 
 ## Phase 0 — Spikes (de-risk before committing; plan §9)
 
-- [ ] **S1 — opencode in a sandbox.** Manually create a Daytona sandbox from a
-  base image, run `opencode serve` on :4096, reach it over a preview URL with
-  `OPENCODE_SERVER_PASSWORD`, and `curl` the SSE `/event` stream.
-  **Done-when:** one prompt round-trips and SSE events print to a terminal.
+- [ ] **S1 — Codex CLI in a sandbox.** Manually create a Daytona sandbox from a
+  base image, run `codex --version`, complete `codex login --device-auth`, and
+  run a small `codex exec` prompt in `/workspace`.
+  **Done-when:** one prompt round-trips and the final response is captured.
 - [ ] **S2 — ChatGPT device-code login.** Run the headless device flow inside the
   sandbox; capture verification URL + user code; approve in a browser; confirm
   `auth.json` is written and a model call succeeds.
-  **Done-when:** an opencode prompt answers using the ChatGPT account. Record
+  **Done-when:** a Codex prompt answers using the ChatGPT account. Record
   token lifetime. If blocked, fall back to `OPENAI_API_KEY` and note it.
 
 > Do not start Phase 2+ until S1 and S2 are understood; they can change the API.
@@ -38,17 +38,17 @@ Legend: `[ ]` todo · `→ depends on` · everything builds against
 - [ ] **D1.** Scaffold `packages/shared` (TS, ESM) exporting `contract.ts` as
   `@app/shared`. Add build + typecheck. **Done-when:** `apps/web` and
   `apps/server` can `import { ROUTES } from "@app/shared"`.
-- [ ] **D2.** Generate a typed opencode client from its OpenAPI spec into
-  `packages/shared` (or server-local). **Done-when:** client compiles.
+- [ ] **D2.** Implement the server-local Codex CLI runner. **Done-when:** runner
+  compiles and can relay final output over the WS contract.
 
 ### Stream C — infra  → none
 - [ ] **C1.** Add monorepo tooling (pnpm workspaces) with `apps/*`,
   `packages/*`. **Done-when:** `pnpm -r build` runs.
 - [ ] **C2.** Author `infra/snapshot/` Daytona declarative image: node, python3
-  + pip, `opencode`, PDF tooling (`poppler-utils`, `pypdf`/`pdfplumber`,
+  + pip, Codex CLI, PDF tooling (`poppler-utils`, `pypdf`/`pdfplumber`,
   `pandoc`). Build it, **record the digest**, set `DAYTONA_SNAPSHOT_DIGEST` in
   `.env`. **Done-when:** a sandbox from the digest has all tools on PATH.
-- [ ] **C3.** Add `AGENTS.md` baked into the snapshot instructing opencode to
+- [ ] **C3.** Add `AGENTS.md` baked into the snapshot instructing Codex to
   record new deps into `dependencyFiles` (reproducibility; contract §6).
 - [ ] **C4.** Wire `docker-compose.yml` + `db/schema.sql` (done) and add minimal
   `apps/server/Dockerfile` + `apps/web/Dockerfile`. **Done-when:**
@@ -74,7 +74,7 @@ Legend: `[ ]` todo · `→ depends on` · everything builds against
 
 ### Stream A  → A1, A2, C2
 - [ ] **A4.** Daytona lifecycle service: create sandbox from
-  `DAYTONA_SNAPSHOT_DIGEST`, start `opencode serve`, poll health, persist
+  `DAYTONA_SNAPSHOT_DIGEST`, verify Codex CLI, persist
   `workspaces` row + state machine (`creating→starting→ready`). Implement
   `POST/GET/DELETE /api/workspaces`. **Done-when:** create returns a `ready`
   `Workspace`; delete tears the sandbox down.
@@ -117,10 +117,10 @@ Legend: `[ ]` todo · `→ depends on` · everything builds against
 ## Phase 5 — Streamed chat
 
 ### Stream A  → A4, A6, D2
-- [ ] **A7.** SSE→WS relay: one SSE connection to opencode `/event` per
-  workspace, normalize to `ServerToClient`, fan out over `/ws`. Implement
+- [ ] **A7.** Codex→WS relay: run Codex CLI in the sandbox, normalize output to
+  `ServerToClient`, fan out over `/ws`. Implement
   `POST .../chat/sessions` and `POST .../chat/messages` (202; output via WS).
-  **Done-when:** a message streams token-by-token to a WS client.
+  **Done-when:** a message response appears in the WS client.
 
 ### Stream B  → B1, A7
 - [ ] **B5.** Chat view: send message, render `message.delta` by `messageId`,

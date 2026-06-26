@@ -12,12 +12,9 @@ import {
   createSandbox,
   deleteSandbox,
   ensureWorkspaceDirs,
-  getOpencodeClient,
   getSandbox,
-  startOpencodeServe,
-  waitForOpencode,
+  verifyCodexCli,
 } from "../daytona.js";
-import { OpencodeClient } from "../opencode.js";
 import { failedDependency, notFound } from "../errors.js";
 
 function errorMessage(err: unknown): string {
@@ -71,13 +68,7 @@ export async function provision(workspaceId: string): Promise<void> {
     [sandbox.id, workspaceId],
   );
   await ensureWorkspaceDirs(sandbox);
-  await startOpencodeServe(sandbox);
-  const ready = await waitForOpencode(sandbox);
-  if (!ready) {
-    throw new Error(
-      "opencode serve did not become healthy on the Daytona preview URL within 60 seconds",
-    );
-  }
+  await verifyCodexCli(sandbox);
   await setState(workspaceId, "ready");
 }
 
@@ -113,12 +104,11 @@ export async function deleteWorkspace(id: string): Promise<void> {
   await query(`DELETE FROM workspaces WHERE id = $1`, [id]);
 }
 
-/** Resolve a live opencode client for a workspace (used by the WS relay + chat). */
-export async function opencodeClientForWorkspace(workspaceId: string): Promise<OpencodeClient> {
+/** Resolve the live Daytona sandbox for a workspace. */
+export async function sandboxForWorkspace(workspaceId: string) {
   const ws = await getWorkspaceRow(workspaceId);
   if (!ws.daytona_sandbox_id) {
     throw notFound(`workspace ${workspaceId} has no sandbox yet`);
   }
-  const sandbox = await getSandbox(ws.daytona_sandbox_id);
-  return getOpencodeClient(sandbox);
+  return getSandbox(ws.daytona_sandbox_id);
 }

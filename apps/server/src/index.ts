@@ -14,7 +14,6 @@ import { loadEnv } from "./env.js";
 import { HttpError } from "./errors.js";
 import { registerRoutes } from "./routes.js";
 import { WsHub } from "./ws.js";
-import { opencodeClientForWorkspace } from "./services/workspaces.js";
 import { closePool, query } from "./db.js";
 
 async function ensureDbShape(): Promise<void> {
@@ -48,8 +47,8 @@ async function main(): Promise<void> {
     reply.code(404).send({ error: { code: "not_found", message: "route not found" } });
   });
 
-  // WebSocket relay: one hub, one SSE connection per workspace.
-  const hub = new WsHub(opencodeClientForWorkspace);
+  // WebSocket hub for browser chat events.
+  const hub = new WsHub();
   await app.register(async (scoped) => {
     scoped.get(WS_PATH, { websocket: true }, (socket: WebSocket, req) => {
       const workspaceId = (req.query as { workspaceId?: string }).workspaceId;
@@ -62,7 +61,7 @@ async function main(): Promise<void> {
     });
   });
 
-  await registerRoutes(app);
+  await registerRoutes(app, hub);
 
   const shutdown = async () => {
     hub.shutdown();

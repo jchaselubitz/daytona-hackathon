@@ -23,12 +23,10 @@ export const SANDBOX_PATHS = {
   knowledge: "/workspace/knowledge", // uploaded knowledgebase files
   automations: "/workspace/automations", // generated/captured scripts
   artifacts: "/workspace/artifacts", // run outputs, per run id
-  auth: "/root/.local/share/opencode/auth.json", // opencode/codex tokens
+  codexHome: "/home/daytona/.codex", // Codex CLI config + auth home
+  codexAuth: "/home/daytona/.codex/auth.json", // ChatGPT OAuth tokens from `codex login`
+  codexApiKey: "/home/daytona/.codex/openai-api-key", // OPENAI_API_KEY fallback for Codex CLI
 } as const;
-
-/** opencode serve listens here inside the sandbox; the server reaches it via a
- *  Daytona preview URL guarded by OPENCODE_SERVER_PASSWORD. */
-export const OPENCODE_PORT = 4096 as const;
 
 // ============================================================================
 // Domain entities (mirror the Postgres schema in db/schema.sql)
@@ -36,7 +34,7 @@ export const OPENCODE_PORT = 4096 as const;
 
 export type WorkspaceState =
   | "creating" // sandbox being provisioned
-  | "starting" // opencode serve booting
+  | "starting" // sandbox tools being verified
   | "ready" // usable
   | "stopped" // sandbox stopped/archived
   | "error";
@@ -48,7 +46,7 @@ export interface Workspace {
   daytonaSandboxId: string | null;
   snapshotDigest: string; // pinned base image digest — reproducibility anchor
   state: WorkspaceState;
-  provisioningError: string | null; // last sandbox/opencode startup failure
+  provisioningError: string | null; // last sandbox/Codex startup failure
   chatgptConnected: boolean; // derived: encrypted_auth_blob present & valid
   createdAt: string; // ISO 8601
 }
@@ -171,7 +169,7 @@ export interface SetApiKeyRequest {
 
 // ---- Chat ----
 export interface CreateChatSessionResponse {
-  sessionId: string; // opencode session id, relayed to the WS
+  sessionId: string; // Codex chat session id, relayed to the WS
 }
 export interface SendChatMessageRequest {
   sessionId: string;
@@ -226,8 +224,8 @@ export const ROUTES = {
 // WebSocket contract — chat relay (server <-> browser)
 // ============================================================================
 // Browser connects to: WS_PATH?workspaceId=<id>
-// The server holds ONE SSE connection to opencode /event per workspace and
-// relays normalized events below. The browser never talks to the sandbox.
+// The server runs Codex CLI inside the sandbox and relays normalized events
+// below. The browser never talks to the sandbox.
 
 export const WS_PATH = "/ws" as const;
 
@@ -237,7 +235,7 @@ export type ClientToServer =
   | { type: "unsubscribe"; sessionId: string }
   | { type: "ping" };
 
-/** Messages the server sends to the browser. Normalized from opencode SSE. */
+/** Messages the server sends to the browser. Normalized from Codex runs. */
 export type ServerToClient =
   | { type: "connected"; workspaceId: string }
   | {

@@ -38,7 +38,6 @@ export interface Env {
     snapshot: string; // snapshot name
     snapshotDigest: string; // pinned digest (reproducibility anchor)
   };
-  opencodeServerPassword: string;
   openaiApiKey: string; // optional fallback
   authEncryptionKey: string; // base64, 32 bytes
 }
@@ -60,7 +59,6 @@ export function loadEnv(): Env {
       snapshot: optional("DAYTONA_SNAPSHOT"),
       snapshotDigest: optional("DAYTONA_SNAPSHOT_DIGEST"),
     },
-    opencodeServerPassword: optional("OPENCODE_SERVER_PASSWORD", "change-me-please"),
     openaiApiKey: optional("OPENAI_API_KEY"),
     authEncryptionKey: optional("AUTH_ENCRYPTION_KEY"),
   };

@@ -11,7 +11,7 @@
 We let **non-technical users** run **agentic work** on their own files inside a
 secure, disposable cloud computer (a **Daytona sandbox**). A user uploads a
 knowledgebase, signs the agent into their **ChatGPT** account, and then chats
-with an agent (**opencode**) that can read those files, write and run
+with a Codex CLI agent that can read those files, write and run
 **automation scripts**, and produce **artifacts** (reports, exports, parsed
 data). Configuration, scripts, and artifacts live in our own database/storage
 **outside** the sandbox, so a workflow can be **reproduced from scratch** on a
@@ -28,9 +28,9 @@ reworking the sandbox/agent layer.
 
 | Open question from the brief | MVP decision |
 |---|---|
-| Smooth ChatGPT login inside the sandbox via OAuth | Use opencode's built-in **codex headless device-code flow**. The control plane triggers `opencode auth login` (headless) in the sandbox, captures the verification URL + user code, and renders them in the React UI. The user approves in *their own* browser. Tokens persist in `auth.json`, which we back up (encrypted) to the DB for reproducibility. |
-| Stream chats between the agent and React | Run **`opencode serve`** inside the sandbox. The control plane is the only client of that server (over a Daytona preview URL, protected by `OPENCODE_SERVER_PASSWORD`); it subscribes to opencode's SSE `/event` stream and **relays** to the browser over a WebSocket. The browser never talks to the sandbox directly. |
-| Necessary sandbox packages (PDF parsing, etc.) | Bake them into a **pinned Daytona snapshot** (custom OCI image): node, python, opencode, and parsing tooling (`poppler-utils`, `pdfplumber`/`pypdf`, `pandoc`, `tesseract` later). The snapshot digest is the unit of reproducibility. |
+| Smooth ChatGPT login inside the sandbox via OAuth | Use Codex's device-code flow. The control plane triggers `codex login --device-auth` in the sandbox, captures the verification URL + user code, and renders them in the React UI. The user approves in *their own* browser. Tokens persist in `auth.json`, which we back up (encrypted) to the DB for reproducibility. |
+| Chat between the agent and React | Run **`codex exec`** inside the sandbox for each web chat turn. The control plane launches Codex through the Daytona process API and relays normalized output to the browser over WebSocket. The browser never talks to the sandbox directly. |
+| Necessary sandbox packages (PDF parsing, etc.) | Bake them into a **pinned Daytona snapshot** (custom OCI image): node, python, Codex CLI, and parsing tooling (`poppler-utils`, `pdfplumber`/`pypdf`, `pandoc`, `tesseract` later). The snapshot digest is the unit of reproducibility. |
 | DB outside Daytona for config + automation scripts | **Postgres** (local for MVP, hosted later) holds users, workspaces, file manifests, automation bundles, artifact index, and encrypted auth blobs. |
 | Artifacts stored on the server | Sandbox writes outputs to a known `artifacts/` dir; control plane collects them into **object storage** (local filesystem / MinIO for MVP, S3 later) and indexes them in Postgres. React downloads via the control plane. |
 | Automations reproducible from scratch on a new sandbox | An **automation is a versioned bundle**: entrypoint + source files + a dependency manifest + the base snapshot digest + required inputs. Reproduce = create sandbox from the same snapshot → hydrate knowledgebase + bundle → restore deps → run. (Details in §7.) |
@@ -51,7 +51,7 @@ reworking the sandbox/agent layer.
         │   API server (Node/TS)                              │
         │     • Auth & workspace mgmt                          │
         │     • Daytona lifecycle (SDK)                        │
-        │     • opencode relay (SSE → WS)                      │
+        │     • Codex CLI runner (process → WS)                │
         │     • File/artifact ingest + serve                  │
         │     • Automation bundle store                        │
         │                                                     │
@@ -59,13 +59,13 @@ reworking the sandbox/agent layer.
         │   Object store (FS/MinIO) ◄── files + artifacts     │
         └───────────────────────────────────────────────────┘
                                    │  Daytona SDK (create/exec/fs)
-                                   │  + preview URL to opencode
+                                   │
                                    ▼
         ┌───────────────────────────────────────────────────┐
         │   DAYTONA SANDBOX  (per workspace, from snapshot)   │
         │                                                     │
-        │   opencode serve  (HTTP + SSE on :4096)             │
-        │     • model = user's ChatGPT (codex OAuth)          │
+        │   codex exec                                        │
+        │     • model = user's ChatGPT (Codex OAuth)          │
         │   /workspace/knowledge   ← uploaded files           │
         │   /workspace/automations ← generated scripts        │
         │   /workspace/artifacts   ← outputs                  │
@@ -73,21 +73,21 @@ reworking the sandbox/agent layer.
         └───────────────────────────────────────────────────┘
 ```
 
-**Why the control plane is the only client of opencode:** non-technical users
-should never see ports, tokens, or a raw agent server. Centralizing the
-connection also lets us authenticate the preview URL, record transcripts, and
-later fan out to multiple sandboxes.
+**Why the control plane is the only Codex caller:** non-technical users should
+never see sandbox processes, tokens, or raw command output. Centralizing the
+execution also lets us record transcripts and later fan out to multiple
+sandboxes.
 
 ---
 
 ## 4. Component responsibilities & tech choices
 
 - **Frontend:** React + TypeScript (Vite). Views: Workspace list, File/knowledgebase manager, Chat (streamed), Automations list, Artifacts/downloads, "Connect ChatGPT" flow.
-- **API server:** Node + TypeScript (Fastify or Express). Chosen because **both opencode and Daytona ship first-class TS SDKs**, and opencode publishes an OpenAPI spec we can generate a typed client from. WebSocket via `ws`/socket.io for chat relay.
+- **API server:** Node + TypeScript (Fastify or Express). Chosen because Daytona ships a first-class TS SDK and the web/server contract is TypeScript. WebSocket via `ws`/socket.io for chat relay.
 - **Database:** Postgres (via Prisma or Drizzle). Local Docker for MVP.
 - **Object storage:** Local filesystem volume for MVP, abstracted behind a small `Storage` interface so S3/MinIO is a drop-in later.
 - **Sandbox runtime:** Daytona, sandboxes created from a **pinned custom snapshot** built via the Daytona declarative image builder.
-- **Agent:** opencode (`opencode serve`) inside the sandbox, authenticated to the user's ChatGPT via the codex OAuth plugin.
+- **Agent:** Codex CLI (`codex exec`) inside the sandbox, authenticated to the user's ChatGPT via `codex login --device-auth`.
 
 ---
 
@@ -97,7 +97,7 @@ later fan out to multiple sandboxes.
 1. User clicks "New workspace."
 2. API server calls Daytona SDK → create sandbox from pinned snapshot digest.
 3. Server records `workspace { id, daytona_sandbox_id, snapshot_digest, state }`.
-4. Server starts `opencode serve` in the sandbox (background process) and verifies `/global/health`.
+4. Server verifies Codex CLI is available in the sandbox.
 
 ### 5.2 Upload knowledgebase
 1. User drops files in React → multipart upload to API server.
@@ -107,17 +107,17 @@ later fan out to multiple sandboxes.
 
 ### 5.3 Connect ChatGPT (OAuth)
 1. User clicks "Connect ChatGPT."
-2. Server runs the opencode **headless device-code** login in the sandbox and parses the **verification URL + user code** from its output.
+2. Server runs `codex login --device-auth` in the sandbox and parses the **verification URL + user code** from its output.
 3. React shows "Go to `<url>`, enter code `XXXX-YYYY`, approve." User completes in their own browser/account.
-4. opencode writes tokens to `auth.json` in the sandbox. Server reads it back, **encrypts** it, and stores it on the workspace (`encrypted_auth_blob`).
+4. Codex writes tokens to `auth.json` in the sandbox. Server reads it back, **encrypts** it, and stores it on the workspace (`encrypted_auth_blob`).
 5. On a fresh sandbox we restore `auth.json` from this blob; we re-run the device flow only when tokens are expired/revoked.
 
 > **Risk to validate early:** token lifetime/refresh behavior and ToS for using a personal ChatGPT subscription via OAuth in a server-side sandbox. See §9. Provide an **API-key fallback** path.
 
-### 5.4 Chat (streamed)
+### 5.4 Chat
 1. React opens a WebSocket to the API server for the workspace.
-2. Server holds a single SSE connection to the sandbox's opencode `/event` (auth'd via preview URL + server password) and relays `message.updated` / `part.updated` / `session.status` events to the browser.
-3. User message → server → `POST /session/:id/message` (or `/prompt_async`) on opencode → agent works, reads `knowledge/`, may write to `automations/` and `artifacts/` → events stream back.
+2. User message → server → Daytona process command running `codex exec` in `/workspace`.
+3. Codex reads `knowledge/`, may write to `automations/` and `artifacts/`, and the server relays normalized completion/status events back over WebSocket.
 
 ### 5.5 Capture & run automations
 1. When the agent writes scripts under `/workspace/automations/<name>/`, the server detects/commits them into an **automation bundle** (source + `manifest.json`) in Postgres + object storage.
@@ -154,7 +154,7 @@ this by making every input to a run explicit and versioned:
 
 1. **Environment** — pinned base **snapshot digest** (OS, runtimes, PDF tooling). Stored on the workspace/bundle. Never "latest."
 2. **Code** — the automation's source files, stored in object storage + Postgres.
-3. **Dependencies** — a `manifest.json` declaring runtime (`python`/`node`), dependency files (`requirements.txt` / `package.json`), and a deterministic `setup` step. We instruct opencode (via its project config/AGENTS.md) to **write any new dependency into these manifest files** rather than installing ad-hoc, so deps are captured, not lost.
+3. **Dependencies** — a `manifest.json` declaring runtime (`python`/`node`), dependency files (`requirements.txt` / `package.json`), and a deterministic `setup` step. We instruct Codex (via AGENTS.md) to **write any new dependency into these manifest files** rather than installing ad-hoc, so deps are captured, not lost.
 4. **Inputs** — the knowledgebase files (canonical copies in object storage) plus any declared run parameters.
 5. **Identity** — restored `auth.json` (or API key) so the agent/model is available.
 
@@ -183,7 +183,7 @@ which is good enough for script-level workflows.
 - Create/destroy one sandbox per workspace from a pinned snapshot.
 - Upload knowledgebase; hydrate into sandbox.
 - Connect ChatGPT via headless device flow (with API-key fallback).
-- Streamed chat (opencode serve → relay → React).
+- Chat through Codex CLI with WebSocket-delivered status and final response.
 - Capture a generated automation as a bundle; run it; collect + download artifacts.
 - Reproduce a bundle on a fresh sandbox (manual trigger).
 
@@ -199,9 +199,9 @@ which is good enough for script-level workflows.
 ## 9. Risks & things to validate first (spikes)
 
 1. **ChatGPT OAuth viability (highest risk).** Confirm the headless device-code flow works inside a Daytona sandbox end-to-end, token lifetime/refresh, and acceptable-use for server-side sandbox usage of a personal subscription. **Mitigation:** ship an **OpenAI API-key** path in parallel so the product works regardless.
-2. **opencode preview-URL networking.** Confirm we can reach `opencode serve` on a Daytona **preview URL** with `OPENCODE_SERVER_PASSWORD`, that SSE stays open through it (heartbeats every ~30s), and reconnect logic.
+2. **Codex process execution.** Confirm `codex exec` works reliably through the Daytona process API, returns final output, and writes artifacts in `/workspace`.
 3. **Snapshot build + cold-start time.** Measure sandbox create time from the custom snapshot; decide if a warm pool is needed even for the demo.
-4. **Dependency capture discipline.** Validate that prompting opencode to record deps into manifest files is reliable enough for reproducibility, or whether we need the post-run snapshot fallback sooner.
+4. **Dependency capture discipline.** Validate that prompting Codex to record deps into manifest files is reliable enough for reproducibility, or whether we need the post-run snapshot fallback sooner.
 5. **Secret handling.** `auth.json` and any API keys must be encrypted at rest and never sent to the browser.
 
 > Recommend doing spikes #1 and #2 **before** committing to the full milestone plan, since both could change the architecture.
@@ -210,9 +210,9 @@ which is good enough for script-level workflows.
 
 ## 10. Milestones (hackathon-oriented)
 
-- **M0 — Spikes (½–1 day):** Stand up `opencode serve` in a Daytona sandbox; reach it via preview URL; complete one ChatGPT device-code login; stream one message to a CLI client. De-risks #1 and #2.
+- **M0 — Spikes (½–1 day):** Stand up Codex CLI in a Daytona sandbox; complete one ChatGPT device-code login; run one message through `codex exec`. De-risks #1 and #2.
 - **M1 — Skeleton (1 day):** Local container with React + API server + Postgres + filesystem storage. Create/list/destroy a workspace (Daytona SDK). Health checks.
-- **M2 — Chat (1 day):** SSE→WS relay; React chat UI streaming agent output; "Connect ChatGPT" UI driving the device flow.
+- **M2 — Chat (1 day):** Codex→WS relay; React chat UI showing agent output; "Connect ChatGPT" UI driving the device flow.
 - **M3 — Files & automations (1 day):** Knowledgebase upload + hydrate; capture a generated automation bundle; run it; collect artifacts; download in React.
 - **M4 — Reproducibility (½–1 day):** Reproduce a bundle on a fresh sandbox from stored snapshot + manifest + files. Demo the full loop.
 - **M5 — Polish:** Error states, reconnects, empty/loading UX for non-technical users, secret encryption pass.
@@ -235,9 +235,9 @@ which is good enough for script-level workflows.
 ```
 /apps
   /web          React (Vite) frontend
-  /server       Node/TS control plane (API, relay, Daytona + opencode clients)
+  /server       Node/TS control plane (API, relay, Daytona + Codex runner)
 /packages
-  /shared       shared types (incl. generated opencode OpenAPI client)
+  /shared       shared types and route contracts
 /infra
   /snapshot     Daytona declarative image (Dockerfile/manifest + pinned deps)
   docker-compose.yml   web + server + postgres + (minio later)
@@ -248,9 +248,7 @@ which is good enough for script-level workflows.
 ---
 
 **Sources consulted for technical grounding:**
-[opencode Server docs](https://opencode.ai/docs/server/) ·
-[opencode Providers/auth](https://opencode.ai/docs/providers/) ·
-[opencode-openai-device-auth](https://github.com/tumf/opencode-openai-device-auth) ·
+[OpenAI Codex CLI](https://github.com/openai/codex) ·
 [Daytona Sandboxes](https://www.daytona.io/docs/en/sandboxes/) ·
 [Daytona Snapshots](https://www.daytona.io/docs/en/snapshots/) ·
 [Daytona TypeScript SDK](https://www.daytona.io/docs/en/typescript-sdk/daytona/)
