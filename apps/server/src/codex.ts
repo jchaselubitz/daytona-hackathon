@@ -89,7 +89,7 @@ export async function runCodexChatMessage(opts: {
       SANDBOX_PATHS.codexApiKey,
     )})"; fi`,
     ";",
-    `if [ -z "${"$"}OPENAI_API_KEY" ] && [ ! -s ${sh(SANDBOX_PATHS.codexAuth)} ]; then echo "Codex is not authenticated. Connect ChatGPT or set an OpenAI API key for this workspace." > ${sh(
+    `if [ -z "${"$"}OPENAI_API_KEY" ]; then echo "No OpenAI API key for this workspace. Add one under Settings." > ${sh(
       logPath,
     )}; printf "%s" "2" > ${sh(statusPath)}; exit 0; fi`,
     ";",

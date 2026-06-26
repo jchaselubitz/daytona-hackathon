@@ -116,8 +116,8 @@ export function App() {
             <div>
               <h2>Pick or create a workspace</h2>
               <p className="muted">
-                Each workspace is a Daytona sandbox with Codex CLI, your knowledge files, and your
-                ChatGPT login.
+                Each workspace is a persistent Daytona sandbox with the agent runtime, your
+                knowledge files, and a browser-accessible remote desktop.
               </p>
             </div>
           </div>

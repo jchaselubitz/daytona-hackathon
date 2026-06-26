@@ -3,6 +3,7 @@ import type {
   Artifact,
   Automation,
   AutomationRun,
+  DesktopInfo,
   FileManifestEntry,
   ServerToClient,
   Workspace,
@@ -11,7 +12,7 @@ import { api } from "../api.js";
 import { errMsg } from "../App.js";
 import { ChatPanel } from "./ChatPanel.js";
 
-type Tab = "files" | "connect" | "chat" | "automations";
+type Tab = "files" | "desktop" | "chat" | "automations" | "settings";
 
 export function WorkspaceDetail({
   workspace,
@@ -37,7 +38,7 @@ export function WorkspaceDetail({
         </div>
         <div className="row">
           <span className={`badge ${workspace.state}`}>{workspace.state}</span>
-          {workspace.chatgptConnected && <span className="badge connected">ChatGPT</span>}
+          {workspace.apiKeyConnected && <span className="badge connected">API key</span>}
           <button
             className="btn secondary"
             onClick={async () => {
@@ -63,7 +64,7 @@ export function WorkspaceDetail({
       )}
 
       <div className="tabs">
-        {(["files", "connect", "chat", "automations"] as Tab[]).map((t) => (
+        {(["files", "desktop", "chat", "automations", "settings"] as Tab[]).map((t) => (
           <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
             {t[0]!.toUpperCase() + t.slice(1)}
           </button>
@@ -71,9 +72,10 @@ export function WorkspaceDetail({
       </div>
 
       {tab === "files" && <FilesPanel workspace={workspace} />}
-      {tab === "connect" && <ConnectPanel workspace={workspace} onChanged={onChanged} />}
+      {tab === "desktop" && <DesktopPanel workspace={workspace} />}
       {tab === "chat" && <ChatPanel workspace={workspace} />}
       {tab === "automations" && <AutomationsPanel workspace={workspace} />}
+      {tab === "settings" && <SettingsPanel workspace={workspace} onChanged={onChanged} />}
     </div>
   );
 }
@@ -150,60 +152,182 @@ function FilesPanel({ workspace }: { workspace: Workspace }) {
 }
 
 // --------------------------------------------------------------------------
-// B4 — Connect ChatGPT
+// Remote desktop — embedded browser-accessible view of the sandbox
 // --------------------------------------------------------------------------
-function ConnectPanel({ workspace, onChanged }: { workspace: Workspace; onChanged: () => void }) {
-  const [verification, setVerification] = useState<{ url?: string; code?: string } | null>(null);
-  const [pending, setPending] = useState(false);
-  const [starting, setStarting] = useState(false);
-  const [connected, setConnected] = useState(workspace.chatgptConnected);
-  const [apiKey, setApiKey] = useState("");
+function DesktopPanel({ workspace }: { workspace: Workspace }) {
+  const [state, setState] = useState<DesktopInfo["state"]>("stopped");
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [address, setAddress] = useState("https://mail.google.com");
+  const [openedUrl, setOpenedUrl] = useState<string | null>(null);
+  const [viewKey, setViewKey] = useState(0);
+  const ready = workspace.state === "ready";
 
-  useEffect(() => {
-    setConnected(workspace.chatgptConnected);
-  }, [workspace.id, workspace.chatgptConnected]);
+  // Normalize a typed address into an http(s) URL the sandbox browser accepts.
+  const normalizeUrl = (raw: string): string => {
+    const v = raw.trim();
+    if (!v) return "";
+    return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  };
 
-  const start = async () => {
-    setError(null);
-    setStarting(true);
-    setConnected(false);
+  const refresh = async () => {
     try {
-      const res = await api.startChatGptConnect(workspace.id);
-      if (!res.verificationUrl || !res.userCode) {
-        throw new Error("ChatGPT login started, but no verification URL was returned.");
-      }
-      setVerification({ url: res.verificationUrl, code: res.userCode });
-      setPending(true);
+      const d = await api.getDesktop(workspace.id);
+      setState(d.state);
+      setUrl(d.url);
     } catch (e) {
       setError(errMsg(e));
-    } finally {
-      setStarting(false);
     }
   };
 
-  // Poll status while pending.
   useEffect(() => {
-    if (!pending) return;
-    const t = setInterval(async () => {
-      try {
-        const s = await api.chatGptConnectStatus(workspace.id);
-        if (s.connected) {
-          setConnected(true);
-          setPending(false);
-          setVerification(null);
-          setError(null);
-          onChanged();
-        }
-      } catch {
-        /* keep polling */
-      }
-    }, 3000);
+    if (!ready) return;
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace.id, ready]);
+
+  // While starting, poll until noVNC reports running.
+  useEffect(() => {
+    if (state !== "starting") return;
+    const t = setInterval(refresh, 3000);
     return () => clearInterval(t);
-  }, [pending, workspace.id, onChanged]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, workspace.id]);
+
+  const start = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const d = await api.startDesktop(workspace.id, normalizeUrl(address) || undefined);
+      setState(d.state);
+      setUrl(d.url);
+      setViewKey((k) => k + 1);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Open (or navigate to) a URL in the in-sandbox browser; starts the desktop if needed.
+  const openUrl = async () => {
+    const target = normalizeUrl(address);
+    if (!target) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const d = await api.openDesktopUrl(workspace.id, target);
+      setState(d.state);
+      if (!url) setUrl(d.url);
+      setOpenedUrl(target);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stop = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const d = await api.stopDesktop(workspace.id);
+      setState(d.state);
+      setUrl(null);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="row spread">
+        <h3 style={{ margin: 0 }}>Remote desktop</h3>
+        <div className="row">
+          <span className={`badge ${state === "running" ? "connected" : "pending"}`}>{state}</span>
+          {state === "running" ? (
+            <button className="btn secondary" onClick={stop} disabled={busy}>
+              {busy ? "…" : "Stop"}
+            </button>
+          ) : (
+            <button className="btn" onClick={start} disabled={!ready || busy || state === "starting"}>
+              {busy || state === "starting" ? "Starting…" : "Start desktop"}
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <div className="error-banner" style={{ marginTop: 12 }}>{error}</div>}
+      {!ready && <p className="muted">The sandbox must be ready before the desktop can start.</p>}
+      {ready && state !== "running" && (
+        <p className="muted">
+          Start the desktop to take over the workspace browser — open a site, complete logins,
+          CAPTCHAs, or MFA, and watch the agent work. No SSH or terminal required.
+        </p>
+      )}
+      {ready && state === "running" && (
+        <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+          Open in browser launches Chromium fullscreen inside the desktop view below.
+          {openedUrl && (
+            <>
+              {" "}
+              Last opened: <span className="mono">{openedUrl}</span> — click inside the desktop
+              panel if you still see folder icons.
+            </>
+          )}
+        </p>
+      )}
+      {ready && (
+        <div className="row" style={{ marginTop: 12, gap: 8 }}>
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void openUrl();
+            }}
+            placeholder="https://mail.google.com"
+            style={{ flex: 1 }}
+            disabled={busy}
+          />
+          <button className="btn secondary" onClick={openUrl} disabled={busy || !address.trim()}>
+            {busy ? "…" : state === "running" ? "Open in browser" : "Open in desktop"}
+          </button>
+        </div>
+      )}
+      {state === "running" && url && (
+        <div className="desktop-frame" style={{ marginTop: 12 }}>
+          <iframe
+            key={viewKey}
+            title="Remote desktop"
+            src={url}
+            allow="clipboard-read; clipboard-write"
+            style={{ width: "100%", height: "70vh", border: "1px solid var(--border, #333)", borderRadius: 8 }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------
+// Settings — OpenAI API key (the only auth path)
+// --------------------------------------------------------------------------
+function SettingsPanel({ workspace, onChanged }: { workspace: Workspace; onChanged: () => void }) {
+  const [connected, setConnected] = useState(workspace.apiKeyConnected);
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setConnected(workspace.apiKeyConnected);
+  }, [workspace.id, workspace.apiKeyConnected]);
 
   const saveKey = async () => {
     setError(null);
+    setSaving(true);
     try {
       await api.setApiKey(workspace.id, apiKey.trim());
       setApiKey("");
@@ -211,67 +335,38 @@ function ConnectPanel({ workspace, onChanged }: { workspace: Workspace; onChange
       onChanged();
     } catch (e) {
       setError(errMsg(e));
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (connected) {
-    return (
-      <>
-        <div className="card" aria-live="polite">
-          <h3>ChatGPT connected</h3>
-          <p>
-            <span className="badge connected">connected</span> This workspace is signed in and ready
-            to chat.
-          </p>
-          <button className="btn secondary" onClick={start} disabled={starting}>
-            {starting ? "Starting login..." : "Reconnect"}
-          </button>
-        </div>
-      </>
-    );
-  }
-
   return (
-    <>
-      <div className="card">
-        <h3>Connect ChatGPT</h3>
-        {error && <div className="error-banner">{error}</div>}
-        {!verification ? (
-          <button className="btn" onClick={start} disabled={workspace.state !== "ready" || starting}>
-            {starting ? "Starting login..." : "Start ChatGPT login"}
-          </button>
-        ) : (
-          <div>
-            <p>1. Open this page in your browser:</p>
-            <p>
-              <a href={verification.url} target="_blank" rel="noreferrer">
-                {verification.url}
-              </a>
-            </p>
-            <p>2. Enter this code:</p>
-            <div className="code-box">{verification.code ?? "—"}</div>
-            <p className="muted" style={{ marginTop: 12 }}>
-              Waiting for you to approve… <span className="badge pending">pending</span>
-            </p>
-          </div>
-        )}
+    <div className="card">
+      <h3>OpenAI API key</h3>
+      {error && <div className="error-banner">{error}</div>}
+      <p className="muted">
+        {connected
+          ? "An OpenAI API key is stored for this workspace. The agent uses it to run. Enter a new key below to replace it."
+          : "Add an OpenAI API key so the agent can run. It is encrypted at rest and never shown again."}
+      </p>
+      <div className="row">
+        <input
+          style={{ flex: 1 }}
+          type="password"
+          placeholder="sk-…"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+        <button className="btn" onClick={saveKey} disabled={!apiKey.trim() || saving}>
+          {saving ? "Saving…" : connected ? "Replace key" : "Save key"}
+        </button>
       </div>
-      <div className="card">
-        <h3>Or use an OpenAI API key</h3>
-        <div className="row">
-          <input
-            style={{ flex: 1 }}
-            type="password"
-            placeholder="sk-…"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-          />
-          <button className="btn secondary" onClick={saveKey} disabled={!apiKey.trim()}>
-            Save key
-          </button>
-        </div>
-      </div>
-    </>
+      {connected && (
+        <p style={{ marginTop: 12 }}>
+          <span className="badge connected">connected</span> Ready to chat.
+        </p>
+      )}
+    </div>
   );
 }
 

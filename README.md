@@ -1,9 +1,10 @@
 # Agentic Workflows in Daytona Sandboxes
 
 Lets non-technical users run agentic work in [Daytona](https://daytona.io)
-sandboxes: upload a knowledgebase, connect ChatGPT, chat with an
-Codex CLI agent that operates on the files, and capture +
-run + reproduce the automations it builds — downloading the outputs.
+sandboxes: upload a knowledgebase, add an OpenAI API key, chat with an
+agent that operates on the files, watch (or take over) a browser-accessible
+**remote desktop** of the workspace, and capture + run + reproduce the
+automations it builds — downloading the outputs.
 
 ## Architecture (MVP)
 
@@ -18,7 +19,11 @@ run + reproduce the automations it builds — downloading the outputs.
 - **`db/schema.sql`** — authoritative Postgres schema.
 
 Each user **workspace** is a Daytona sandbox. The server runs `codex exec` inside
-it and relays chat results over WebSocket to the browser.
+it and relays chat results over WebSocket to the browser. The server can also
+start Daytona's computer-use stack (Xvfb + x11vnc + noVNC) in the sandbox and
+hand the browser a signed preview URL, which the web app embeds as a **remote
+desktop** — the same view backs agent computer-use and human takeover. Auth is a
+single per-workspace **OpenAI API key**, stored encrypted on the server.
 
 See [`docs/mvp-engineering-plan.md`](docs/mvp-engineering-plan.md),
 [`docs/code-contract.md`](docs/code-contract.md),
@@ -43,8 +48,9 @@ The control plane runs without these, but creating a live workspace needs them:
   [`infra/snapshot/README.md`](infra/snapshot/README.md)).
 - `DAYTONA_SNAPSHOT_DIGEST` — recommended for reproducibility, but not required
   for local workspace creation.
-- `AUTH_ENCRYPTION_KEY` — `openssl rand -base64 32` (encrypts stored auth).
-- `OPENAI_API_KEY` — optional fallback if you skip the ChatGPT device login.
+- `AUTH_ENCRYPTION_KEY` — `openssl rand -base64 32` (encrypts the stored API key).
+- `OPENAI_API_KEY` — seeds every new sandbox; otherwise add a per-workspace key
+  in the web app under **Settings**.
 
 ## Development (without Docker)
 

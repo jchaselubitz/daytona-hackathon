@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS workspaces (
   snapshot_digest     TEXT NOT NULL,                 -- pinned base image digest
   state               TEXT NOT NULL DEFAULT 'creating',
   provisioning_error  TEXT,                          -- last sandbox/Codex startup failure
-  auth_mode           TEXT,                          -- 'chatgpt-oauth' | 'openai-api-key'
-  encrypted_auth_blob BYTEA,                         -- encrypted auth.json / api key
+  auth_mode           TEXT,                          -- 'openai-api-key' (the only auth path)
+  encrypted_auth_blob BYTEA,                         -- encrypted OpenAI API key
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_user ON workspaces(user_id);

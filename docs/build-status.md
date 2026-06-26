@@ -37,14 +37,16 @@ up, `/api/health` 200, DB read/write verified, web served on :5173).
 |---|---|---|
 | A4 workspace lifecycle + routes | **done / code-complete** | Routes + create→provision state machine verified (transitions to `error` cleanly without a snapshot). Live `ready` needs C2 digest. |
 | A5 file upload + manifest + push | **code-complete** | Canonical copy to storage, manifest row, push into sandbox knowledge. |
-| A6 ChatGPT connect + api-key | **code-complete** | Device flow + encrypted `auth.json` backup + API-key fallback. |
+| A6 secrets (OpenAI API key) | **code-complete** | Single auth path: encrypted per-workspace OpenAI API key, pushed into the sandbox. ChatGPT/Codex device-code sign-in removed. |
+| A6b remote desktop | **code-complete** | `services/desktop.ts` starts Daytona computer-use (Xvfb+x11vnc+noVNC) and returns a signed noVNC preview URL; needs a live sandbox to validate. |
 | A7 Codex→WS relay + chat routes | **code-complete** | Codex CLI output is normalized + fanned out; chat is 202 + WS output. |
 | A8 capture automations | **code-complete** | In-sandbox tar → bundle + `automations` row (versioned). |
 | A9 run automation | **code-complete** | setup + entrypoint with inputs as env; collects `/workspace/artifacts/<run-id>`. |
 | A10 reproduce | **code-complete** | Fresh sandbox from bundle digest → restore auth → hydrate knowledge → unpack → run. |
 | B2 workspaces UI | **done** | List, create, detail, live state polling. |
 | B3 files UI | **done** | Drag-and-drop upload, list with sizes + sha. |
-| B4 connect UI | **done** | URL + code display, status polling, API-key form. |
+| B4 settings UI | **done** | OpenAI API-key form (the only auth path); device-code UI removed. |
+| B4b desktop UI | **done** | "Desktop" tab embeds the noVNC preview URL in an iframe with start/stop + status polling. |
 | B5 chat UI | **done** | Streams `message.delta` by id, finalizes on completed, tool activity, reconnect. |
 | B6/B7 automations + artifacts UI | **done** | Run button, run polling, artifact download links. |
 | B8 reproduce UI | **done** | Reproduce action wired. |
@@ -54,12 +56,14 @@ up, `/api/health` 200, DB read/write verified, web served on :5173).
 |---|---|---|
 | P1 error/empty/loading states | **partial** | Present across views; can be hardened. |
 | P2 WS/SSE reconnect/backoff | **done** | Exponential backoff + re-subscribe in `wsClient.ts`; relay error surfacing in `ws.ts`. |
-| P3 secrets at rest | **done** | AES-256-GCM (`crypto.ts`); `encrypted_auth_blob` never serialized — `chatgptConnected` is a derived boolean. |
-| P4 e2e demo script | **todo** | Create → upload → connect → chat → capture → run → download → reproduce. |
+| P3 secrets at rest | **done** | AES-256-GCM (`crypto.ts`); `encrypted_auth_blob` never serialized — `apiKeyConnected` is a derived boolean. |
+| P4 e2e demo script | **todo** | Create → upload → add API key → chat → capture → run → download → reproduce. |
 
 ## To make the live path work (human steps)
 1. Build + push `infra/snapshot` and register a Daytona snapshot; set
    `DAYTONA_SNAPSHOT` + `DAYTONA_SNAPSHOT_DIGEST` in `.env` (spike S1).
-2. Run the ChatGPT device login once to confirm the command + `auth.json` path
-   (spike S2), or set `OPENAI_API_KEY` to use the fallback.
+2. Set `OPENAI_API_KEY` to seed sandboxes, or add a per-workspace key in the web
+   app under **Settings**.
 3. Set `AUTH_ENCRYPTION_KEY` (`openssl rand -base64 32`).
+4. Open the **Desktop** tab on a ready workspace and confirm noVNC loads via the
+   signed preview URL (validates `services/desktop.ts` end to end).

@@ -69,7 +69,7 @@ export function mapWorkspace(r: WorkspaceRow): Workspace {
     snapshotDigest: r.snapshot_digest,
     state: r.state as WorkspaceState,
     provisioningError: r.provisioning_error,
-    chatgptConnected: r.encrypted_auth_blob != null,
+    apiKeyConnected: r.encrypted_auth_blob != null,
     createdAt: r.created_at.toISOString(),
   };
 }

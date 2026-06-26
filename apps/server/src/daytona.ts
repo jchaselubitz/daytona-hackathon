@@ -69,7 +69,12 @@ export async function deleteSandbox(sandboxId: string): Promise<void> {
 
 /** Ensure the canonical workspace directories exist inside the sandbox. */
 export async function ensureWorkspaceDirs(sandbox: Sandbox): Promise<void> {
-  const dirs = [SANDBOX_PATHS.knowledge, SANDBOX_PATHS.automations, SANDBOX_PATHS.artifacts];
+  const dirs = [
+    SANDBOX_PATHS.knowledge,
+    SANDBOX_PATHS.automations,
+    SANDBOX_PATHS.artifacts,
+    SANDBOX_PATHS.browserProfile,
+  ];
   const mkdir = `mkdir -p ${dirs.join(" ")}`;
   let result = await exec(sandbox, mkdir);
 

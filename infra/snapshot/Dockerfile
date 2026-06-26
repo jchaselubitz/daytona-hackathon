@@ -13,7 +13,10 @@
 
 FROM node:22-bookworm
 
-# ---- System packages: PDF/document tooling ----
+# ---- System packages: PDF/document tooling + remote-desktop browser ----
+# chromium is the browser the remote desktop launches on the virtual display so
+# users can log into Gmail etc. and the agent can drive a real browser. fonts +
+# dbus-x11 make it render and run cleanly under Xvfb/xfce4.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 \
       python3-pip \
@@ -25,6 +28,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git \
       tar \
       gzip \
+      chromium \
+      fonts-liberation \
+      dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Python PDF libraries (system-wide; Debian needs the break flag) ----
@@ -47,4 +53,4 @@ WORKDIR /workspace
 
 # Sanity: fail the build if a required tool is missing from PATH.
 RUN node --version && python3 --version && pdftotext -v 2>&1 | head -1 \
-    && pandoc --version | head -1 && codex --version
+    && pandoc --version | head -1 && codex --version && chromium --version

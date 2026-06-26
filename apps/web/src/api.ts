@@ -5,17 +5,20 @@
  */
 import {
   buildPath,
+  type ApiKeyStatusResponse,
   type Artifact,
   type Automation,
   type AutomationRun,
   type ApiError,
-  type ChatGptConnectStatusResponse,
   type CreateChatSessionResponse,
   type CreateWorkspaceRequest,
   type FileManifestEntry,
+  type GetDesktopResponse,
+  type OpenDesktopUrlResponse,
   type RunAutomationRequest,
   type SendChatMessageRequest,
-  type StartChatGptConnectResponse,
+  type StartDesktopResponse,
+  type StopDesktopResponse,
   type UploadFilesResponse,
   type Workspace,
 } from "@app/shared";
@@ -83,13 +86,22 @@ export const api = {
   },
   listFiles: (id: string) => call<FileManifestEntry[]>("GET", buildPath("listFiles", { id })),
 
-  // ChatGPT connect
-  startChatGptConnect: (id: string) =>
-    call<StartChatGptConnectResponse>("POST", buildPath("startChatGptConnect", { id })),
-  chatGptConnectStatus: (id: string) =>
-    call<ChatGptConnectStatusResponse>("GET", buildPath("chatGptConnectStatus", { id })),
+  // Secrets: OpenAI API key
   setApiKey: (id: string, openaiApiKey: string) =>
     call<void>("POST", buildPath("setApiKey", { id }), { body: { openaiApiKey } }),
+  apiKeyStatus: (id: string) =>
+    call<ApiKeyStatusResponse>("GET", buildPath("apiKeyStatus", { id })),
+
+  // Remote desktop
+  getDesktop: (id: string) => call<GetDesktopResponse>("GET", buildPath("getDesktop", { id })),
+  startDesktop: (id: string, url?: string) =>
+    call<StartDesktopResponse>("POST", buildPath("startDesktop", { id }), {
+      body: url ? { url } : undefined,
+    }),
+  stopDesktop: (id: string) =>
+    call<StopDesktopResponse>("POST", buildPath("stopDesktop", { id })),
+  openDesktopUrl: (id: string, url: string) =>
+    call<OpenDesktopUrlResponse>("POST", buildPath("openDesktopUrl", { id }), { body: { url } }),
 
   // Chat
   createChatSession: (id: string) =>

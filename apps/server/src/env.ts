@@ -28,6 +28,8 @@ function int(name: string, fallback: number): number {
 export interface Env {
   nodeEnv: string;
   serverPort: number;
+  /** Origin browsers use to reach this server (desktop preview iframe, downloads). */
+  serverPublicUrl: string;
   webOrigin: string;
   databaseUrl: string;
   storageDriver: "fs" | "minio" | "s3";
@@ -46,9 +48,11 @@ let cached: Env | null = null;
 
 export function loadEnv(): Env {
   if (cached) return cached;
+  const serverPort = int("SERVER_PORT", 8080);
   cached = {
     nodeEnv: optional("NODE_ENV", "development"),
-    serverPort: int("SERVER_PORT", 8080),
+    serverPort,
+    serverPublicUrl: optional("SERVER_PUBLIC_URL", `http://localhost:${serverPort}`),
     webOrigin: optional("WEB_ORIGIN", "http://localhost:5173"),
     databaseUrl: required("DATABASE_URL"),
     storageDriver: (optional("STORAGE_DRIVER", "fs") as Env["storageDriver"]),

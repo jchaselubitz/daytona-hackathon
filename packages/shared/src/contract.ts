@@ -23,10 +23,15 @@ export const SANDBOX_PATHS = {
   knowledge: "/workspace/knowledge", // uploaded knowledgebase files
   automations: "/workspace/automations", // generated/captured scripts
   artifacts: "/workspace/artifacts", // run outputs, per run id
-  codexHome: "/home/daytona/.codex", // Codex CLI config + auth home
-  codexAuth: "/home/daytona/.codex/auth.json", // ChatGPT OAuth tokens from `codex login`
-  codexApiKey: "/home/daytona/.codex/openai-api-key", // OPENAI_API_KEY fallback for Codex CLI
+  browserProfile: "/workspace/.browser-profile", // Chromium profile (persists logins/cookies)
+  codexHome: "/home/daytona/.codex", // Codex CLI config home
+  codexApiKey: "/home/daytona/.codex/openai-api-key", // OPENAI_API_KEY for the Codex CLI agent
 } as const;
+
+/** Port inside the sandbox that noVNC serves the remote desktop on.
+ *  Daytona's computer-use stack (Xvfb + xfce4 + x11vnc + noVNC) listens here;
+ *  the server turns it into a browser-embeddable preview URL. */
+export const DESKTOP_NOVNC_PORT = 6080 as const;
 
 // ============================================================================
 // Domain entities (mirror the Postgres schema in db/schema.sql)
@@ -47,11 +52,31 @@ export interface Workspace {
   snapshotDigest: string; // pinned base image digest — reproducibility anchor
   state: WorkspaceState;
   provisioningError: string | null; // last sandbox/Codex startup failure
-  chatgptConnected: boolean; // derived: encrypted_auth_blob present & valid
+  apiKeyConnected: boolean; // derived: an OpenAI API key is stored for this workspace
   createdAt: string; // ISO 8601
 }
 
-export type AuthMode = "chatgpt-oauth" | "openai-api-key";
+/** Only one auth path: a stored OpenAI API key. */
+export type AuthMode = "openai-api-key";
+
+// ============================================================================
+// Remote desktop (browser-accessible view of the sandbox)
+// ============================================================================
+
+export type DesktopState =
+  | "stopped" // computer-use processes not running
+  | "starting" // start requested; noVNC not confirmed ready yet
+  | "running"; // noVNC up; `url` is embeddable
+
+/** Embeddable remote-desktop view of a workspace's sandbox. */
+export interface DesktopInfo {
+  state: DesktopState;
+  /** Full noVNC URL to embed in an <iframe>, token already applied. Null unless running. */
+  url: string | null;
+}
+
+/** Default page the in-sandbox browser opens on when no URL is given. */
+export const DESKTOP_DEFAULT_URL = "https://www.google.com" as const;
 
 export interface FileManifestEntry {
   id: string;
@@ -150,22 +175,30 @@ export interface UploadFilesResponse {
 }
 export type ListFilesResponse = FileManifestEntry[];
 
-// ---- Connect ChatGPT (device-code OAuth) ----
-export interface StartChatGptConnectResponse {
-  mode: AuthMode;
-  // present when mode === "chatgpt-oauth":
-  verificationUrl?: string; // user opens this in their own browser
-  userCode?: string; // user enters this code
-  expiresInSec?: number;
-}
-export interface ChatGptConnectStatusResponse {
-  connected: boolean;
-  pending: boolean;
-}
-// API-key fallback:
+// ---- Secrets: OpenAI API key (the only auth path) ----
 export interface SetApiKeyRequest {
   openaiApiKey: string;
 }
+/** Whether an OpenAI API key is stored for the workspace (key never returned). */
+export interface ApiKeyStatusResponse {
+  connected: boolean;
+}
+
+// ---- Remote desktop ----
+export type GetDesktopResponse = DesktopInfo;
+/** Optional URL to open the in-sandbox browser at; defaults to DESKTOP_DEFAULT_URL. */
+export interface StartDesktopRequest {
+  url?: string;
+}
+export type StartDesktopResponse = DesktopInfo;
+export interface StopDesktopResponse {
+  state: DesktopState;
+}
+/** Open (or navigate the in-sandbox browser to) a URL on the running desktop. */
+export interface OpenDesktopUrlRequest {
+  url: string;
+}
+export type OpenDesktopUrlResponse = DesktopInfo;
 
 // ---- Chat ----
 export interface CreateChatSessionResponse {
@@ -204,9 +237,13 @@ export const ROUTES = {
   uploadFiles: "POST /api/workspaces/:id/files",
   listFiles: "GET /api/workspaces/:id/files",
 
-  startChatGptConnect: "POST /api/workspaces/:id/chatgpt/connect",
-  chatGptConnectStatus: "GET /api/workspaces/:id/chatgpt/status",
-  setApiKey: "POST /api/workspaces/:id/chatgpt/api-key",
+  setApiKey: "POST /api/workspaces/:id/secrets/openai-api-key",
+  apiKeyStatus: "GET /api/workspaces/:id/secrets/status",
+
+  getDesktop: "GET /api/workspaces/:id/desktop",
+  startDesktop: "POST /api/workspaces/:id/desktop/start",
+  stopDesktop: "POST /api/workspaces/:id/desktop/stop",
+  openDesktopUrl: "POST /api/workspaces/:id/desktop/open-url",
 
   createChatSession: "POST /api/workspaces/:id/chat/sessions",
   sendChatMessage: "POST /api/workspaces/:id/chat/messages",

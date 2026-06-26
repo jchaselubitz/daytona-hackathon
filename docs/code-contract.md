@@ -59,9 +59,12 @@ defaults `X-User-Id` to the seeded demo user.
 | Delete workspace | `DELETE /api/workspaces/:id` | → `204` |
 | Upload files | `POST /api/workspaces/:id/files` | multipart `files` → `UploadFilesResponse` |
 | List files | `GET /api/workspaces/:id/files` | → `FileManifestEntry[]` |
-| Start ChatGPT connect | `POST /api/workspaces/:id/chatgpt/connect` | → `StartChatGptConnectResponse` |
-| ChatGPT status | `GET /api/workspaces/:id/chatgpt/status` | → `ChatGptConnectStatusResponse` |
-| API-key fallback | `POST /api/workspaces/:id/chatgpt/api-key` | `SetApiKeyRequest` → `204` |
+| Set OpenAI API key | `POST /api/workspaces/:id/secrets/openai-api-key` | `SetApiKeyRequest` → `204` |
+| API-key status | `GET /api/workspaces/:id/secrets/status` | → `ApiKeyStatusResponse` |
+| Get desktop | `GET /api/workspaces/:id/desktop` | → `GetDesktopResponse` |
+| Start desktop | `POST /api/workspaces/:id/desktop/start` | `StartDesktopRequest` (optional `url`) → `StartDesktopResponse` |
+| Stop desktop | `POST /api/workspaces/:id/desktop/stop` | → `StopDesktopResponse` |
+| Open URL in desktop | `POST /api/workspaces/:id/desktop/open-url` | `OpenDesktopUrlRequest` → `OpenDesktopUrlResponse` |
 | Create chat session | `POST /api/workspaces/:id/chat/sessions` | → `CreateChatSessionResponse` |
 | Send chat message | `POST /api/workspaces/:id/chat/messages` | `SendChatMessageRequest` → `202 SendChatMessageResponse` |
 | List automations | `GET /api/workspaces/:id/automations` | → `Automation[]` |

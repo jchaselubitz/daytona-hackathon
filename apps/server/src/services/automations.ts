@@ -26,7 +26,7 @@ import { getStorage } from "../storage/index.js";
 import { createSandbox, deleteSandbox, ensureWorkspaceDirs, exec, getSandbox } from "../daytona.js";
 import { getWorkspaceRow } from "./workspaces.js";
 import { hydrateKnowledge } from "./files.js";
-import { restoreAuth } from "./chatgpt.js";
+import { restoreApiKey } from "./secrets.js";
 import { badRequest, notFound } from "../errors.js";
 
 // ---------------------------------------------------------------------------
@@ -150,8 +150,8 @@ export async function reproduceAutomation(
     const sandbox = await createSandbox(`reproduce-${automation.name}`);
     try {
       await ensureWorkspaceDirs(sandbox);
-      // 2) restore auth.json + 3) hydrate knowledge from canonical storage.
-      await restoreAuth(workspaceId, sandbox.id);
+      // 2) restore the OpenAI API key + 3) hydrate knowledge from canonical storage.
+      await restoreApiKey(workspaceId, sandbox.id);
       await hydrateKnowledge(workspaceId, sandbox.id);
       // 4) unpack the bundle into /workspace/automations/<name>.
       const archive = await streamToBuffer(await getStorage().get(automation.storage_key));

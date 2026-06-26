@@ -8,6 +8,8 @@ import {
   parseRoute,
   type CreateWorkspaceRequest,
   type SetApiKeyRequest,
+  type StartDesktopRequest,
+  type OpenDesktopUrlRequest,
   type SendChatMessageRequest,
   type RunAutomationRequest,
 } from "@app/shared";
@@ -19,7 +21,12 @@ import {
   listWorkspaces,
 } from "./services/workspaces.js";
 import { listFiles, uploadFiles, type IncomingFile } from "./services/files.js";
-import { connectStatus, setApiKey, startConnect } from "./services/chatgpt.js";
+import { apiKeyStatus, setApiKey } from "./services/secrets.js";
+import { getDesktop, startDesktop, stopDesktop, openDesktopUrl } from "./services/desktop.js";
+import {
+  proxyDesktopPreviewHttp,
+  proxyDesktopPreviewWs,
+} from "./services/desktop-preview-proxy.js";
 import { createChatSession, sendChatMessage } from "./services/chat.js";
 import {
   getArtifactRow,
@@ -65,19 +72,45 @@ export async function registerRoutes(app: FastifyInstance, hub: WsHub): Promise<
   });
   app.get(route("listFiles").path, async (req) => listFiles((req.params as Params).id!));
 
-  // ---- Connect ChatGPT ----
-  app.post(route("startChatGptConnect").path, async (req) =>
-    startConnect((req.params as Params).id!),
-  );
-  app.get(route("chatGptConnectStatus").path, async (req) => {
-    const { connected, pending } = await connectStatus((req.params as Params).id!);
-    return { connected, pending };
-  });
+  // ---- Secrets: OpenAI API key (the only auth path) ----
   app.post(route("setApiKey").path, async (req, reply) => {
     const body = req.body as SetApiKeyRequest;
     await setApiKey((req.params as Params).id!, body?.openaiApiKey ?? "");
     reply.code(204);
     return null;
+  });
+  app.get(route("apiKeyStatus").path, async (req) =>
+    apiKeyStatus((req.params as Params).id!),
+  );
+
+  // ---- Remote desktop (browser-embedded noVNC view of the sandbox) ----
+  app.get(route("getDesktop").path, async (req) => getDesktop((req.params as Params).id!));
+  app.post(route("startDesktop").path, async (req) => {
+    const body = req.body as StartDesktopRequest | undefined;
+    return startDesktop((req.params as Params).id!, body?.url);
+  });
+  app.post(route("stopDesktop").path, async (req) => stopDesktop((req.params as Params).id!));
+  app.post(route("openDesktopUrl").path, async (req) => {
+    const body = req.body as OpenDesktopUrlRequest | undefined;
+    if (!body?.url) throw badRequest("missing 'url' in request body");
+    return openDesktopUrl((req.params as Params).id!, body.url);
+  });
+
+  // Proxied noVNC embed (skips Daytona preview warning for iframe usage).
+  const previewPath = "/api/workspaces/:id/desktop/preview";
+  app.route({
+    method: "GET",
+    url: previewPath,
+    handler: async (req, reply) => proxyDesktopPreviewHttp(req, reply),
+  });
+  app.route({
+    method: "GET",
+    url: `${previewPath}/*`,
+    handler: async (req, reply) => proxyDesktopPreviewHttp(req, reply),
+    wsHandler: (socket, req) => {
+      const workspaceId = (req.params as Params).id!;
+      void proxyDesktopPreviewWs(workspaceId, socket, req);
+    },
   });
 
   // ---- Chat (async; output streams over the WebSocket) ----
