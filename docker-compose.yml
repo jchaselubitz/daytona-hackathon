@@ -26,6 +26,10 @@ services:
     build:
       context: .
       dockerfile: apps/server/Dockerfile
+      target: build
+    command: >
+      sh -c "pnpm --filter @app/shared build &&
+      (pnpm --filter @app/shared dev & pnpm --filter @app/server dev)"
     env_file: .env
     environment:
       # Override host so the server reaches Postgres by service name in-network.
@@ -34,6 +38,8 @@ services:
       - "${SERVER_PORT}:${SERVER_PORT}"
     volumes:
       - storage:/data/storage
+      - ./apps/server/src:/app/apps/server/src
+      - ./packages/shared/src:/app/packages/shared/src
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,9 +48,17 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+    command: >
+      sh -c "pnpm --filter @app/shared build &&
+      (pnpm --filter @app/shared dev & pnpm --filter @app/web dev --host 0.0.0.0 --port 5173)"
     env_file: .env
     ports:
       - "5173:5173"
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+      - ./apps/web/index.html:/app/apps/web/index.html:ro
+      - ./apps/web/vite.config.ts:/app/apps/web/vite.config.ts:ro
+      - ./packages/shared/src:/app/packages/shared/src
     depends_on:
       - server
 

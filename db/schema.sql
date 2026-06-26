@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   daytona_sandbox_id  TEXT,
   snapshot_digest     TEXT NOT NULL,                 -- pinned base image digest
   state               TEXT NOT NULL DEFAULT 'creating',
+  provisioning_error  TEXT,                          -- last sandbox/opencode startup failure
   auth_mode           TEXT,                          -- 'chatgpt-oauth' | 'openai-api-key'
   encrypted_auth_blob BYTEA,                         -- encrypted auth.json / api key
   created_at          TIMESTAMPTZ NOT NULL DEFAULT now()

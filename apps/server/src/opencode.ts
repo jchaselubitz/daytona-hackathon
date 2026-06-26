@@ -30,7 +30,11 @@ export class OpencodeClient {
     this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
     this.headers = { "content-type": "application/json" };
     if (opts.previewToken) this.headers["x-daytona-preview-token"] = opts.previewToken;
-    if (opts.serverPassword) this.headers["authorization"] = `Bearer ${opts.serverPassword}`;
+    if (opts.serverPassword) {
+      this.headers["authorization"] = `Basic ${Buffer.from(
+        `opencode:${opts.serverPassword}`,
+      ).toString("base64")}`;
+    }
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {

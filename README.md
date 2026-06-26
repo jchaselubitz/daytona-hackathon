@@ -40,8 +40,10 @@ Open http://localhost:5173. `GET http://localhost:8080/api/health` should return
 The control plane runs without these, but creating a live workspace needs them:
 
 - `DAYTONA_API_KEY` — Daytona credentials.
-- `DAYTONA_SNAPSHOT` + `DAYTONA_SNAPSHOT_DIGEST` — build & register
-  `infra/snapshot` first (see [`infra/snapshot/README.md`](infra/snapshot/README.md)).
+- `DAYTONA_SNAPSHOT` — build & register `infra/snapshot` first (see
+  [`infra/snapshot/README.md`](infra/snapshot/README.md)).
+- `DAYTONA_SNAPSHOT_DIGEST` — recommended for reproducibility, but not required
+  for local workspace creation.
 - `AUTH_ENCRYPTION_KEY` — `openssl rand -base64 32` (encrypts stored auth).
 - `OPENAI_API_KEY` — optional fallback if you skip the ChatGPT device login.
 

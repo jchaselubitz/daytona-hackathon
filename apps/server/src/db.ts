@@ -54,6 +54,7 @@ interface WorkspaceRow {
   daytona_sandbox_id: string | null;
   snapshot_digest: string;
   state: string;
+  provisioning_error: string | null;
   auth_mode: string | null;
   encrypted_auth_blob: Buffer | null;
   created_at: Date;
@@ -67,6 +68,7 @@ export function mapWorkspace(r: WorkspaceRow): Workspace {
     daytonaSandboxId: r.daytona_sandbox_id,
     snapshotDigest: r.snapshot_digest,
     state: r.state as WorkspaceState,
+    provisioningError: r.provisioning_error,
     chatgptConnected: r.encrypted_auth_blob != null,
     createdAt: r.created_at.toISOString(),
   };

@@ -15,7 +15,11 @@ import { HttpError } from "./errors.js";
 import { registerRoutes } from "./routes.js";
 import { WsHub } from "./ws.js";
 import { opencodeClientForWorkspace } from "./services/workspaces.js";
-import { closePool } from "./db.js";
+import { closePool, query } from "./db.js";
+
+async function ensureDbShape(): Promise<void> {
+  await query(`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS provisioning_error TEXT`);
+}
 
 async function main(): Promise<void> {
   const env = loadEnv();
@@ -24,6 +28,7 @@ async function main(): Promise<void> {
   await app.register(cors, { origin: env.webOrigin, credentials: true });
   await app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } }); // 100MB/file
   await app.register(websocket);
+  await ensureDbShape();
 
   // Uniform ApiError envelope for every non-2xx.
   app.setErrorHandler((err, _req, reply) => {

@@ -48,6 +48,7 @@ export interface Workspace {
   daytonaSandboxId: string | null;
   snapshotDigest: string; // pinned base image digest — reproducibility anchor
   state: WorkspaceState;
+  provisioningError: string | null; // last sandbox/opencode startup failure
   chatgptConnected: boolean; // derived: encrypted_auth_blob present & valid
   createdAt: string; // ISO 8601
 }

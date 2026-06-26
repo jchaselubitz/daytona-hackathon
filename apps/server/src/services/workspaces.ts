@@ -18,14 +18,32 @@ import {
   waitForOpencode,
 } from "../daytona.js";
 import { OpencodeClient } from "../opencode.js";
-import { notFound } from "../errors.js";
+import { failedDependency, notFound } from "../errors.js";
 
-async function setState(id: string, state: string): Promise<void> {
-  await query(`UPDATE workspaces SET state = $1 WHERE id = $2`, [state, id]);
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+async function setState(id: string, state: string, provisioningError: string | null = null): Promise<void> {
+  await query(`UPDATE workspaces SET state = $1, provisioning_error = $2 WHERE id = $3`, [
+    state,
+    provisioningError,
+    id,
+  ]);
 }
 
 export async function createWorkspace(name: string): Promise<Workspace> {
   const env = loadEnv();
+  if (!env.daytona.apiKey) {
+    throw failedDependency("daytona_not_configured", "DAYTONA_API_KEY is not set in .env");
+  }
+  if (!env.daytona.snapshot) {
+    throw failedDependency(
+      "daytona_snapshot_not_configured",
+      "DAYTONA_SNAPSHOT must be set in .env before creating workspaces",
+    );
+  }
   const digest = env.daytona.snapshotDigest || env.daytona.snapshot || "unpinned";
   const { rows } = await query<WorkspaceRow>(
     `INSERT INTO workspaces (user_id, name, snapshot_digest, state)
@@ -37,7 +55,7 @@ export async function createWorkspace(name: string): Promise<Workspace> {
   // Fire-and-forget provisioning; errors are captured into the row state.
   void provision(ws.id).catch((err) => {
     console.error(`[workspaces] provision ${ws.id} failed:`, err);
-    void setState(ws.id, "error");
+    void setState(ws.id, "error", errorMessage(err));
   });
   return ws;
 }
@@ -46,14 +64,21 @@ export async function createWorkspace(name: string): Promise<Workspace> {
 export async function provision(workspaceId: string): Promise<void> {
   const ws = await getWorkspaceRow(workspaceId);
   const sandbox = await createSandbox(ws.name);
-  await query(`UPDATE workspaces SET daytona_sandbox_id = $1, state = 'starting' WHERE id = $2`, [
-    sandbox.id,
-    workspaceId,
-  ]);
+  await query(
+    `UPDATE workspaces
+     SET daytona_sandbox_id = $1, state = 'starting', provisioning_error = NULL
+     WHERE id = $2`,
+    [sandbox.id, workspaceId],
+  );
   await ensureWorkspaceDirs(sandbox);
   await startOpencodeServe(sandbox);
   const ready = await waitForOpencode(sandbox);
-  await setState(workspaceId, ready ? "ready" : "error");
+  if (!ready) {
+    throw new Error(
+      "opencode serve did not become healthy on the Daytona preview URL within 60 seconds",
+    );
+  }
+  await setState(workspaceId, "ready");
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {

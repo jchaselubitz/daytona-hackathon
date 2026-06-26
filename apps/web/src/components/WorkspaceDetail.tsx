@@ -54,6 +54,11 @@ export function WorkspaceDetail({
         <div className="error-banner" style={{ color: "var(--amber)", borderColor: "var(--amber)" }}>
           Sandbox is {workspace.state}. Files and chat become available once it is{" "}
           <strong>ready</strong>.
+          {workspace.provisioningError && (
+            <div className="mono" style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+              {workspace.provisioningError}
+            </div>
+          )}
         </div>
       )}
 
