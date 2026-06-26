@@ -1,0 +1,20 @@
+node_modules
+.env
+.env.local
+
+.overlord/tmp
+
+# build outputs
+dist/
+build/
+*.tsbuildinfo
+apps/web/dist/
+apps/server/dist/
+packages/shared/dist/
+
+# misc
+.DS_Store
+*.log
+coverage/
+# server local FS storage when run outside docker
+/data/
