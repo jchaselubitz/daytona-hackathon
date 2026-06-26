@@ -4,6 +4,10 @@
   "private": true,
   "description": "MVP: non-technical users run agentic work in Daytona sandboxes.",
   "packageManager": "pnpm@10.7.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -15,6 +19,9 @@
     "typecheck": "pnpm -r typecheck",
     "dev": "pnpm -r --parallel dev",
     "dev:server": "pnpm --filter @app/server dev",
-    "dev:web": "pnpm --filter @app/web dev"
+    "dev:web": "pnpm --filter @app/web dev",
+    "start": "pnpm --parallel --filter @app/server --filter @app/web start",
+    "start:server": "pnpm --filter @app/server start",
+    "start:web": "pnpm --filter @app/web start"
   }
 }

@@ -55,6 +55,14 @@ pnpm dev:server                      # tsx watch on :8080 (needs Postgres + .env
 pnpm dev:web                         # Vite on :5173
 ```
 
+After building, start the production-style entrypoints from the monorepo root:
+
+```bash
+pnpm start:server                    # node apps/server/dist/index.js
+pnpm start:web                       # Vite preview on :5173
+pnpm start                           # server + web together
+```
+
 ## Layout
 
 ```
