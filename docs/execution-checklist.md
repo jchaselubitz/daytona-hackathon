@@ -1,7 +1,9 @@
 # Execution Checklist — Build the MVP
 
-**Status:** Ready to build · **Date:** 2026-06-26 · Pairs with
-[`mvp-engineering-plan.md`](./mvp-engineering-plan.md) and
+**Status:** First execution pass complete — see [`build-status.md`](./build-status.md)
+for per-step state (the whole stack builds + runs under docker compose; only the
+live Daytona/ChatGPT paths await Phase-0 spikes). · **Date:** 2026-06-26 ·
+Pairs with [`mvp-engineering-plan.md`](./mvp-engineering-plan.md) and
 [`code-contract.md`](./code-contract.md).
 
 Each step is a discrete, agent-actionable unit with a **Done-when** acceptance
