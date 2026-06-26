@@ -24,6 +24,11 @@ async function setState(id: string, state: string): Promise<void> {
   await query(`UPDATE workspaces SET state = $1 WHERE id = $2`, [state, id]);
 }
 
+async function failProvision(workspaceId: string, err: unknown): Promise<void> {
+  console.error(`[workspaces] provision ${workspaceId} failed:`, err);
+  await setState(workspaceId, "error");
+}
+
 export async function createWorkspace(name: string): Promise<Workspace> {
   const env = loadEnv();
   const digest = env.daytona.snapshotDigest || env.daytona.snapshot || "unpinned";
@@ -35,25 +40,39 @@ export async function createWorkspace(name: string): Promise<Workspace> {
   );
   const ws = mapWorkspace(rows[0]!);
   // Fire-and-forget provisioning; errors are captured into the row state.
-  void provision(ws.id).catch((err) => {
-    console.error(`[workspaces] provision ${ws.id} failed:`, err);
-    void setState(ws.id, "error");
-  });
+  void provision(ws.id).catch((err) => void failProvision(ws.id, err));
   return ws;
 }
 
 /** Provision the sandbox for a workspace and drive it to `ready`. */
 export async function provision(workspaceId: string): Promise<void> {
   const ws = await getWorkspaceRow(workspaceId);
-  const sandbox = await createSandbox(ws.name);
-  await query(`UPDATE workspaces SET daytona_sandbox_id = $1, state = 'starting' WHERE id = $2`, [
-    sandbox.id,
-    workspaceId,
-  ]);
+  const sandbox = ws.daytona_sandbox_id
+    ? await getSandbox(ws.daytona_sandbox_id)
+    : await createSandbox(ws.name);
+  await query(
+    `UPDATE workspaces SET daytona_sandbox_id = $1, state = 'starting' WHERE id = $2`,
+    [sandbox.id, workspaceId],
+  );
   await ensureWorkspaceDirs(sandbox);
   await startOpencodeServe(sandbox);
   const ready = await waitForOpencode(sandbox);
   await setState(workspaceId, ready ? "ready" : "error");
+  if (!ready) {
+    throw new Error(
+      `opencode did not become healthy within the startup timeout for sandbox ${sandbox.id}`,
+    );
+  }
+}
+
+export async function retryWorkspaceProvision(workspaceId: string): Promise<Workspace> {
+  const ws = await getWorkspaceRow(workspaceId);
+  if (!["error", "creating", "starting"].includes(ws.state)) {
+    return mapWorkspace(ws);
+  }
+  await setState(workspaceId, ws.daytona_sandbox_id ? "starting" : "creating");
+  void provision(workspaceId).catch((err) => void failProvision(workspaceId, err));
+  return getWorkspace(workspaceId);
 }
 
 export async function listWorkspaces(): Promise<Workspace[]> {

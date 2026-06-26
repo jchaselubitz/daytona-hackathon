@@ -89,6 +89,13 @@ const OPENCODE_SESSION = "opencode-serve";
  * recreating the session is harmless if it already runs.
  */
 export async function startOpencodeServe(sandbox: Sandbox): Promise<void> {
+  const hasOpencode = await sandbox.process.executeCommand("command -v opencode");
+  if ((hasOpencode.exitCode ?? 0) !== 0) {
+    throw new Error(
+      `opencode is not available in sandbox ${sandbox.id}; check the DAYTONA_SNAPSHOT image. ` +
+        `Output: ${(hasOpencode.result ?? "").slice(0, 500)}`,
+    );
+  }
   await sandbox.process.createSession(OPENCODE_SESSION).catch(() => {
     /* session may already exist */
   });

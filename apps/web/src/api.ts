@@ -73,6 +73,8 @@ export const api = {
     call<Workspace>("POST", buildPath("createWorkspace"), { body }),
   listWorkspaces: () => call<Workspace[]>("GET", buildPath("listWorkspaces")),
   getWorkspace: (id: string) => call<Workspace>("GET", buildPath("getWorkspace", { id })),
+  retryWorkspaceProvision: (id: string) =>
+    call<Workspace>("POST", buildPath("retryWorkspaceProvision", { id })),
   deleteWorkspace: (id: string) => call<void>("DELETE", buildPath("deleteWorkspace", { id })),
 
   // Files

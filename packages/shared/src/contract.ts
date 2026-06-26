@@ -143,6 +143,7 @@ export interface CreateWorkspaceRequest {
 export type CreateWorkspaceResponse = Workspace;
 export type ListWorkspacesResponse = Workspace[];
 export type GetWorkspaceResponse = Workspace;
+export type RetryWorkspaceProvisionResponse = Workspace;
 
 // ---- Files / knowledgebase ----
 // Upload is multipart/form-data: field `files` (one or more). Response below.
@@ -200,6 +201,7 @@ export const ROUTES = {
   createWorkspace: "POST /api/workspaces",
   listWorkspaces: "GET /api/workspaces",
   getWorkspace: "GET /api/workspaces/:id",
+  retryWorkspaceProvision: "POST /api/workspaces/:id/retry",
   deleteWorkspace: "DELETE /api/workspaces/:id",
 
   uploadFiles: "POST /api/workspaces/:id/files",

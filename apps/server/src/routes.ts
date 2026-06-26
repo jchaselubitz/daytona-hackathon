@@ -17,6 +17,7 @@ import {
   deleteWorkspace,
   getWorkspace,
   listWorkspaces,
+  retryWorkspaceProvision,
 } from "./services/workspaces.js";
 import { listFiles, uploadFiles, type IncomingFile } from "./services/files.js";
 import { connectStatus, setApiKey, startConnect } from "./services/chatgpt.js";
@@ -48,6 +49,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get(route("listWorkspaces").path, async () => listWorkspaces());
   app.get(route("getWorkspace").path, async (req) =>
     getWorkspace((req.params as Params).id!),
+  );
+  app.post(route("retryWorkspaceProvision").path, async (req) =>
+    retryWorkspaceProvision((req.params as Params).id!),
   );
   app.delete(route("deleteWorkspace").path, async (req, reply) => {
     await deleteWorkspace((req.params as Params).id!);

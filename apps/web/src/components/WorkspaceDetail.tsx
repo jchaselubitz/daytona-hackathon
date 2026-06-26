@@ -23,7 +23,23 @@ export function WorkspaceDetail({
   onDeleted: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("files");
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const ready = workspace.state === "ready";
+  const canRetry = ["error", "creating", "starting"].includes(workspace.state);
+
+  const retryProvision = async () => {
+    setRetrying(true);
+    setRetryError(null);
+    try {
+      await api.retryWorkspaceProvision(workspace.id);
+      onChanged();
+    } catch (e) {
+      setRetryError(errMsg(e));
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   return (
     <div>
@@ -52,8 +68,18 @@ export function WorkspaceDetail({
 
       {!ready && (
         <div className="error-banner" style={{ color: "var(--amber)", borderColor: "var(--amber)" }}>
-          Sandbox is {workspace.state}. Files and chat become available once it is{" "}
-          <strong>ready</strong>.
+          <div className="row spread">
+            <div>
+              Sandbox is {workspace.state}. Files and chat become available once it is{" "}
+              <strong>ready</strong>.
+            </div>
+            {canRetry && (
+              <button className="btn secondary" onClick={retryProvision} disabled={retrying}>
+                {retrying ? "Retrying…" : "Retry"}
+              </button>
+            )}
+          </div>
+          {retryError && <div className="muted" style={{ marginTop: 8 }}>{retryError}</div>}
         </div>
       )}
 
